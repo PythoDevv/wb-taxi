@@ -1,0 +1,5 @@
+aiogram==3.20.0
+sqlalchemy[asyncio]==2.0.41
+asyncpg==0.30.0
+python-dotenv==1.1.0
+alembic==1.16.1

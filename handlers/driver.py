@@ -1,0 +1,337 @@
+"""
+Driver application flow ("Ulanish uchun Ariza").
+
+FSM steps:
+  full_name -> phone -> warning_ack ->
+  passport_front -> passport_back ->
+  license_front  -> license_back  ->
+  texpassport_front -> texpassport_back ->
+  selfie -> license_card ->
+  car_photos (4 photos, counted in FSM data) ->
+  plate_number -> [save + notify admin]
+"""
+
+from aiogram import Bot, F, Router
+from aiogram.filters import StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.types import (
+    InputMediaPhoto,
+    Message,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import ADMIN_CHAT_ID
+from database.db import get_session
+from database.models import Application, User
+from keyboards.reply import continue_kb, main_menu_kb, phone_request_kb, remove_kb
+from states.forms import DriverStates
+
+router = Router()
+
+WARNING_TEXT = (
+    "⚠️ <b>Diqqat!</b>\n\n"
+    "Endi sizdan hujjatlaringizning originalini rasmga olib jo'natishingiz so'raladi.\n\n"
+    "❌ Soliqdan olingan skrinshot <b>QABUL QILINMAYDI!</b>\n\n"
+    "Davom etish uchun pastdagi knopkani bosing."
+)
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+@router.message(F.text == "📝 Ulanish uchun Ariza")
+async def driver_start(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(
+        "✏️ Iltimos, ism va familiyangizni yozing:",
+        reply_markup=remove_kb(),
+    )
+    await state.set_state(DriverStates.full_name)
+
+
+# ── Step 1: full_name ─────────────────────────────────────────────────────────
+
+@router.message(DriverStates.full_name)
+async def get_full_name(message: Message, state: FSMContext) -> None:
+    name = (message.text or "").strip()
+    if not name:
+        await message.answer("Ism bo'sh bo'lmasligi kerak. Qayta yozing:")
+        return
+    await state.update_data(full_name=name)
+    await message.answer(
+        "📞 Iltimos, telefon raqamingizni jo'nating (knopka orqali):",
+        reply_markup=phone_request_kb(),
+    )
+    await state.set_state(DriverStates.phone)
+
+
+# ── Step 2: phone (contact) ───────────────────────────────────────────────────
+
+@router.message(DriverStates.phone, F.contact)
+async def get_phone_contact(message: Message, state: FSMContext) -> None:
+    phone = message.contact.phone_number  # type: ignore[union-attr]
+    await state.update_data(phone=phone)
+    await message.answer(WARNING_TEXT, reply_markup=continue_kb(), parse_mode="HTML")
+    await state.set_state(DriverStates.warning_ack)
+
+
+@router.message(DriverStates.phone)
+async def get_phone_fallback(message: Message) -> None:
+    await message.answer(
+        "Iltimos, telefon raqamingizni <b>knopka</b> orqali jo'nating:",
+        reply_markup=phone_request_kb(),
+        parse_mode="HTML",
+    )
+
+
+# ── Step 3: warning acknowledgement ──────────────────────────────────────────
+
+@router.message(DriverStates.warning_ack, F.text == "✅ Davom etish")
+async def warning_acked(message: Message, state: FSMContext) -> None:
+    await message.answer(
+        "1/12 — <b>Passport (old tarafi)</b> rasmini jo'nating:",
+        reply_markup=remove_kb(),
+        parse_mode="HTML",
+    )
+    await state.set_state(DriverStates.passport_front)
+
+
+@router.message(DriverStates.warning_ack)
+async def warning_not_acked(message: Message) -> None:
+    await message.answer("Iltimos, pastdagi tugmani bosing.", reply_markup=continue_kb())
+
+
+# ── Photo helper ──────────────────────────────────────────────────────────────
+
+def _file_id(message: Message) -> str | None:
+    if message.photo:
+        return message.photo[-1].file_id
+    return None
+
+
+async def _expect_photo(message: Message, next_prompt: str) -> str | None:
+    fid = _file_id(message)
+    if not fid:
+        await message.answer(next_prompt)
+        return None
+    return fid
+
+
+# ── Step 4–11: individual document photos ────────────────────────────────────
+
+PHOTO_STEPS = [
+    ("passport_front",    DriverStates.passport_front,    "2/12 — <b>Passport (orqa tarafi)</b> rasmini jo'nating:",              DriverStates.passport_back),
+    ("passport_back",     DriverStates.passport_back,     "3/12 — <b>Haydovchilik guvohnomasi (old tarafi)</b> rasmini jo'nating:", DriverStates.license_front),
+    ("license_front",     DriverStates.license_front,     "4/12 — <b>Haydovchilik guvohnomasi (orqa tarafi)</b> rasmini jo'nating:", DriverStates.license_back),
+    ("license_back",      DriverStates.license_back,      "5/12 — <b>Texnik passport (old tarafi)</b> rasmini jo'nating:",          DriverStates.texpassport_front),
+    ("texpassport_front", DriverStates.texpassport_front, "6/12 — <b>Texnik passport (orqa tarafi)</b> rasmini jo'nating:",         DriverStates.texpassport_back),
+    ("texpassport_back",  DriverStates.texpassport_back,  "7/12 — <b>Selfie</b> rasmingizni jo'nating:",                           DriverStates.selfie),
+    ("selfie",            DriverStates.selfie,            "8/12 — <b>Litsenziya</b> rasmini jo'nating:",                           DriverStates.license_card),
+]
+
+
+def _make_photo_handler(field: str, current_state, next_prompt: str, next_state):
+    """Factory to avoid closure issues inside a loop."""
+
+    @router.message(StateFilter(current_state), F.photo)
+    async def _handler(message: Message, state: FSMContext) -> None:
+        fid = message.photo[-1].file_id  # type: ignore[index]
+        await state.update_data(**{field: fid})
+        await message.answer(next_prompt, parse_mode="HTML")
+        await state.set_state(next_state)
+
+    @router.message(StateFilter(current_state))
+    async def _bad(message: Message) -> None:
+        await message.answer("Iltimos, rasm jo'nating (foto shaklida).")
+
+    return _handler, _bad
+
+
+for _field, _cur, _next_prompt, _next_state in PHOTO_STEPS:
+    _make_photo_handler(_field, _cur, _next_prompt, _next_state)
+
+
+# ── Step 12 (license_card -> car_photos intro) ────────────────────────────────
+
+@router.message(DriverStates.license_card, F.photo)
+async def get_license_card(message: Message, state: FSMContext) -> None:
+    await state.update_data(license_card=message.photo[-1].file_id, car_photos=[])
+    await message.answer(
+        "🚗 <b>9–12/12</b> — Mashinangizning 4 ta tarafidan rasmga olib jo'nating "
+        "(old, orqa, chap, o'ng).\n\nHammasini birin-ketin <b>4 ta rasm</b> jo'natishingiz kerak.",
+        parse_mode="HTML",
+    )
+    await state.set_state(DriverStates.car_photos)
+
+
+@router.message(DriverStates.license_card)
+async def license_card_bad(message: Message) -> None:
+    await message.answer("Iltimos, rasm jo'nating (foto shaklida).")
+
+
+# ── Step 13: car_photos (4 photos) ───────────────────────────────────────────
+
+CAR_LABELS = ["old", "orqa", "chap", "o'ng"]
+
+
+@router.message(DriverStates.car_photos, F.photo)
+async def collect_car_photos(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    photos: list = data.get("car_photos", [])
+    photos.append(message.photo[-1].file_id)  # type: ignore[index]
+    await state.update_data(car_photos=photos)
+
+    received = len(photos)
+    remaining = 4 - received
+
+    if remaining > 0:
+        await message.answer(
+            f"✅ <b>{received}/4</b> ta rasm qabul qilindi. Yana <b>{remaining}</b> ta rasm jo'nating.",
+            parse_mode="HTML",
+        )
+    else:
+        # All 4 received → move to plate_number
+        await message.answer(
+            "🔢 Endi mashinangizning <b>davlat raqamini</b> yozing (masalan: 01A123BC):",
+            parse_mode="HTML",
+        )
+        await state.set_state(DriverStates.plate_number)
+
+
+@router.message(DriverStates.car_photos)
+async def car_photos_bad(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    received = len(data.get("car_photos", []))
+    remaining = 4 - received
+    await message.answer(
+        f"Iltimos, rasm jo'nating. Hali <b>{remaining}</b> ta rasm kerak.",
+        parse_mode="HTML",
+    )
+
+
+# ── Step 14: plate_number → save → notify ────────────────────────────────────
+
+@router.message(DriverStates.plate_number)
+async def get_plate_number(message: Message, state: FSMContext, bot: Bot) -> None:
+    plate = (message.text or "").strip().upper()
+    if not plate:
+        await message.answer("Davlat raqami bo'sh bo'lmasligi kerak. Qayta yozing:")
+        return
+
+    await state.update_data(plate_number=plate)
+    data = await state.get_data()
+
+    # ── Persist to DB ──────────────────────────────────────────────────────────
+    session: AsyncSession = get_session()
+    try:
+        from sqlalchemy import select
+
+        result = await session.execute(
+            select(User).where(User.telegram_id == message.from_user.id)  # type: ignore[union-attr]
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            user = User(
+                telegram_id=message.from_user.id,  # type: ignore[union-attr]
+                username=message.from_user.username,  # type: ignore[union-attr]
+            )
+            session.add(user)
+            await session.flush()
+
+        car_photos: list = data.get("car_photos", [])
+        app = Application(
+            user_id=user.id,
+            full_name=data["full_name"],
+            phone=data["phone"],
+            promocode=data.get("promocode"),
+            passport_front_id=data["passport_front"],
+            passport_back_id=data["passport_back"],
+            license_front_id=data["license_front"],
+            license_back_id=data["license_back"],
+            texpassport_front_id=data["texpassport_front"],
+            texpassport_back_id=data["texpassport_back"],
+            selfie_id=data["selfie"],
+            license_card_id=data["license_card"],
+            car_photo_1_id=car_photos[0],
+            car_photo_2_id=car_photos[1],
+            car_photo_3_id=car_photos[2],
+            car_photo_4_id=car_photos[3],
+            plate_number=plate,
+            status="new",
+        )
+        session.add(app)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
+
+    await state.clear()
+
+    # ── Notify admin ───────────────────────────────────────────────────────────
+    await _notify_admin(bot, data, plate)
+
+    # ── Success message ────────────────────────────────────────────────────────
+    await message.answer(
+        "🎉 <b>Tabriklaymiz!</b>\n\n"
+        "Arizangiz qabul qilindi. Tez orada operatorlarimiz tomonidan "
+        "ko'rib chiqilib, qayta javob yozib yuboriladi.",
+        parse_mode="HTML",
+        reply_markup=main_menu_kb(),
+    )
+
+
+# ── Admin notification ────────────────────────────────────────────────────────
+
+async def _notify_admin(bot: Bot, data: dict, plate: str) -> None:
+    promo_line = f"🎟 Promocode: <code>{data.get('promocode')}</code>" if data.get("promocode") else "🎟 Promocode: yo'q"
+
+    summary = (
+        "📋 <b>Yangi haydovchi arizasi!</b>\n\n"
+        f"👤 F.I.O: {data['full_name']}\n"
+        f"📞 Telefon: {data['phone']}\n"
+        f"🚘 Davlat raqami: <code>{plate}</code>\n"
+        f"{promo_line}"
+    )
+    await bot.send_message(ADMIN_CHAT_ID, summary, parse_mode="HTML")
+
+    car_photos: list = data.get("car_photos", [])
+    all_photos = [
+        data["passport_front"],
+        data["passport_back"],
+        data["license_front"],
+        data["license_back"],
+        data["texpassport_front"],
+        data["texpassport_back"],
+        data["selfie"],
+        data["license_card"],
+        *car_photos,
+    ]
+
+    captions = [
+        "Passport (old)",
+        "Passport (orqa)",
+        "Guvohnoma (old)",
+        "Guvohnoma (orqa)",
+        "Tex. passport (old)",
+        "Tex. passport (orqa)",
+        "Selfie",
+        "Litsenziya",
+        "Mashina — old",
+        "Mashina — orqa",
+        "Mashina — chap",
+        "Mashina — o'ng",
+    ]
+
+    # Send as media groups of max 10
+    CHUNK = 10
+    for i in range(0, len(all_photos), CHUNK):
+        chunk_photos = all_photos[i : i + CHUNK]
+        chunk_captions = captions[i : i + CHUNK]
+        media = [
+            InputMediaPhoto(
+                media=fid,
+                caption=cap,
+            )
+            for fid, cap in zip(chunk_photos, chunk_captions)
+        ]
+        await bot.send_media_group(ADMIN_CHAT_ID, media)
