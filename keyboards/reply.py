@@ -51,3 +51,25 @@ def continue_kb() -> ReplyKeyboardMarkup:
 
 def remove_kb() -> ReplyKeyboardRemove:
     return ReplyKeyboardRemove()
+
+
+def admin_menu_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="➕ Admin qo'shish"), KeyboardButton(text="➖ Admin o'chirish")],
+            [KeyboardButton(text="➕ Guruh qo'shish"), KeyboardButton(text="➖ Guruh o'chirish")],
+            [KeyboardButton(text="📊 Promocode export"), KeyboardButton(text="🔄 Google Sheets sync")],
+            [KeyboardButton(text="🔎 User qidirish"), KeyboardButton(text="🔗 Ariza xabari")],
+            [KeyboardButton(text="📋 Ro'yxatlar"), KeyboardButton(text="📣 Hammaga xabar")],
+            [KeyboardButton(text="🏠 Asosiy menyu")],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def cancel_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="❌ Bekor qilish")]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )

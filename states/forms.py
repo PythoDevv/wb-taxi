@@ -30,3 +30,14 @@ class BrandStates(StatesGroup):
     car_year = State()
     car_color = State()
     plate_number = State()
+
+
+class AdminStates(StatesGroup):
+    adding_admin = State()
+    removing_admin = State()
+    adding_notification_chat = State()
+    removing_notification_chat = State()
+    waiting_broadcast_post = State()
+    exporting_promocode = State()
+    searching_user = State()
+    searching_application_message = State()

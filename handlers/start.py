@@ -9,7 +9,7 @@ from states.forms import PromoStates
 router = Router()
 
 WELCOME_TEXT = (
-    "🚕 <b>WB TAXI HUMO</b> botiga xush kelibsiz!\n\n"
+    "🚕 <b>Janob Taxi</b> botiga xush kelibsiz!\n\n"
     "Quyidagi menyulardan birini tanlang:\n"
     "📝 <b>Ulanish uchun Ariza</b> — Haydovchilik uchun ariza\n"
     "🎁 <b>Brend Ariza</b> — Mashinangizni brendlash uchun ariza"

@@ -11,7 +11,10 @@ FSM steps:
   plate_number -> [save + notify admin]
 """
 
+import logging
+
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -20,13 +23,15 @@ from aiogram.types import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import ADMIN_CHAT_ID
+from database.admin import get_notification_chat_ids
 from database.db import get_session
 from database.models import Application, User
+from database.reports import add_application_notification
 from keyboards.reply import continue_kb, main_menu_kb, phone_request_kb, remove_kb
 from states.forms import DriverStates
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 WARNING_TEXT = (
     "⚠️ <b>Diqqat!</b>\n\n"
@@ -258,6 +263,8 @@ async def get_plate_number(message: Message, state: FSMContext, bot: Bot) -> Non
             status="new",
         )
         session.add(app)
+        await session.flush()
+        application_id = app.id
         await session.commit()
     except Exception:
         await session.rollback()
@@ -268,7 +275,7 @@ async def get_plate_number(message: Message, state: FSMContext, bot: Bot) -> Non
     await state.clear()
 
     # ── Notify admin ───────────────────────────────────────────────────────────
-    await _notify_admin(bot, data, plate)
+    await _notify_admin(bot, application_id, data, plate)
 
     # ── Success message ────────────────────────────────────────────────────────
     await message.answer(
@@ -282,7 +289,7 @@ async def get_plate_number(message: Message, state: FSMContext, bot: Bot) -> Non
 
 # ── Admin notification ────────────────────────────────────────────────────────
 
-async def _notify_admin(bot: Bot, data: dict, plate: str) -> None:
+async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -> None:
     promo_line = f"🎟 Promocode: <code>{data.get('promocode')}</code>" if data.get("promocode") else "🎟 Promocode: yo'q"
 
     summary = (
@@ -292,8 +299,6 @@ async def _notify_admin(bot: Bot, data: dict, plate: str) -> None:
         f"🚘 Davlat raqami: <code>{plate}</code>\n"
         f"{promo_line}"
     )
-    await bot.send_message(ADMIN_CHAT_ID, summary, parse_mode="HTML")
-
     car_photos: list = data.get("car_photos", [])
     all_photos = [
         data["passport_front"],
@@ -324,14 +329,26 @@ async def _notify_admin(bot: Bot, data: dict, plate: str) -> None:
 
     # Send as media groups of max 10
     CHUNK = 10
-    for i in range(0, len(all_photos), CHUNK):
-        chunk_photos = all_photos[i : i + CHUNK]
-        chunk_captions = captions[i : i + CHUNK]
-        media = [
-            InputMediaPhoto(
-                media=fid,
-                caption=cap,
+    for chat_id in await get_notification_chat_ids():
+        try:
+            summary_message = await bot.send_message(chat_id, summary, parse_mode="HTML")
+            await add_application_notification(
+                "driver",
+                application_id,
+                chat_id,
+                summary_message.message_id,
             )
-            for fid, cap in zip(chunk_photos, chunk_captions)
-        ]
-        await bot.send_media_group(ADMIN_CHAT_ID, media)
+
+            for i in range(0, len(all_photos), CHUNK):
+                chunk_photos = all_photos[i : i + CHUNK]
+                chunk_captions = captions[i : i + CHUNK]
+                media = [
+                    InputMediaPhoto(
+                        media=fid,
+                        caption=cap,
+                    )
+                    for fid, cap in zip(chunk_photos, chunk_captions)
+                ]
+                await bot.send_media_group(chat_id, media)
+        except (TelegramBadRequest, TelegramForbiddenError) as exc:
+            logger.warning("Failed to notify chat %s: %s", chat_id, exc)

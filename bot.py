@@ -8,7 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import BOT_TOKEN
 from database.db import init_db
-from handlers import brand, driver, start
+from handlers import admin, brand, driver, start
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +27,7 @@ async def main() -> None:
     )
     dp = Dispatcher(storage=MemoryStorage())
 
+    dp.include_router(admin.router)
     dp.include_router(start.router)
     dp.include_router(driver.router)
     dp.include_router(brand.router)

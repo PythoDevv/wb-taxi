@@ -1,18 +1,23 @@
 """Brend Ariza flow."""
 
+import logging
+
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import ADMIN_CHAT_ID
+from database.admin import get_notification_chat_ids
 from database.db import get_session
 from database.models import BrandApplication, User
+from database.reports import add_application_notification
 from keyboards.reply import continue_kb, main_menu_kb, phone_request_kb, remove_kb
 from states.forms import BrandStates
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 WARNING_TEXT = (
     "⚠️ <b>DIQQAT! BRENDLASH SHARTLARI:</b>\n\n"
@@ -167,6 +172,8 @@ async def brand_plate(message: Message, state: FSMContext, bot: Bot) -> None:
             status="new",
         )
         session.add(app)
+        await session.flush()
+        application_id = app.id
         await session.commit()
     except Exception:
         await session.rollback()
@@ -175,7 +182,7 @@ async def brand_plate(message: Message, state: FSMContext, bot: Bot) -> None:
         await session.close()
 
     await state.clear()
-    await _notify_admin(bot, data, plate)
+    await _notify_admin(bot, application_id, data, plate)
 
     await message.answer(
         "🎉 <b>Tabriklaymiz!</b>\n\n"
@@ -186,7 +193,7 @@ async def brand_plate(message: Message, state: FSMContext, bot: Bot) -> None:
     )
 
 
-async def _notify_admin(bot: Bot, data: dict, plate: str) -> None:
+async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -> None:
     promo_line = (
         f"🎟 Promocode: <code>{data.get('promocode')}</code>"
         if data.get("promocode")
@@ -202,4 +209,14 @@ async def _notify_admin(bot: Bot, data: dict, plate: str) -> None:
         f"🚘 Davlat raqami: <code>{plate}</code>\n"
         f"{promo_line}"
     )
-    await bot.send_message(ADMIN_CHAT_ID, text, parse_mode="HTML")
+    for chat_id in await get_notification_chat_ids():
+        try:
+            summary_message = await bot.send_message(chat_id, text, parse_mode="HTML")
+            await add_application_notification(
+                "brand",
+                application_id,
+                chat_id,
+                summary_message.message_id,
+            )
+        except (TelegramBadRequest, TelegramForbiddenError) as exc:
+            logger.warning("Failed to notify chat %s: %s", chat_id, exc)
