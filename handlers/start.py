@@ -3,6 +3,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from database.users import get_or_create_user, set_user_promocode
 from keyboards.reply import main_menu_kb, promo_question_kb
 from states.forms import PromoStates
 
@@ -19,6 +20,15 @@ WELCOME_TEXT = (
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
+    user = await get_or_create_user(
+        message.from_user.id,  # type: ignore[union-attr]
+        message.from_user.username,  # type: ignore[union-attr]
+    )
+    if user.promocode_asked:
+        await state.update_data(promocode=user.promocode)
+        await _show_main_menu(message, state)
+        return
+
     await message.answer(
         "🎟 Sizda <b>promocode</b> bormi?",
         reply_markup=promo_question_kb(),
@@ -39,6 +49,11 @@ async def promo_choice(message: Message, state: FSMContext) -> None:
         await state.set_state(PromoStates.entering_promo)
 
     elif text == "➡️ Davom etish":
+        await set_user_promocode(
+            message.from_user.id,  # type: ignore[union-attr]
+            message.from_user.username,  # type: ignore[union-attr]
+            None,
+        )
         await state.update_data(promocode=None)
         await _show_main_menu(message, state)
 
@@ -56,6 +71,11 @@ async def promo_entered(message: Message, state: FSMContext) -> None:
         await message.answer("Promocode bo'sh bo'lmasligi kerak. Qayta yozing:")
         return
 
+    await set_user_promocode(
+        message.from_user.id,  # type: ignore[union-attr]
+        message.from_user.username,  # type: ignore[union-attr]
+        code,
+    )
     await state.update_data(promocode=code)
     await message.answer(f"✅ Promocode qabul qilindi: <code>{code}</code>", parse_mode="HTML")
     await _show_main_menu(message, state)

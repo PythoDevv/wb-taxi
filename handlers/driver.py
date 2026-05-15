@@ -20,7 +20,6 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     FSInputFile,
-    InputMediaPhoto,
     Message,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +29,7 @@ from database.assets import get_prompt_image_file_id, save_prompt_image_file_id
 from database.db import get_session
 from database.models import Application, User
 from database.reports import add_application_notification
+from database.users import get_or_create_user
 from keyboards.reply import continue_kb, main_menu_kb, phone_request_kb, remove_kb
 from states.forms import DriverStates
 
@@ -48,7 +48,12 @@ WARNING_TEXT = (
 
 @router.message(F.text == "📝 Ulanish uchun Ariza")
 async def driver_start(message: Message, state: FSMContext) -> None:
+    user = await get_or_create_user(
+        message.from_user.id,  # type: ignore[union-attr]
+        message.from_user.username,  # type: ignore[union-attr]
+    )
     await state.clear()
+    await state.update_data(promocode=user.promocode)
     await message.answer(
         "✏️ Iltimos, ism va familiyangizni yozing:",
         reply_markup=remove_kb(),
@@ -368,8 +373,6 @@ async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -
         "Mashina — o'ng",
     ]
 
-    # Send as media groups of max 10
-    CHUNK = 10
     for chat_id in await get_notification_chat_ids():
         try:
             summary_message = await bot.send_message(chat_id, summary, parse_mode="HTML")
@@ -380,16 +383,7 @@ async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -
                 summary_message.message_id,
             )
 
-            for i in range(0, len(all_photos), CHUNK):
-                chunk_photos = all_photos[i : i + CHUNK]
-                chunk_captions = captions[i : i + CHUNK]
-                media = [
-                    InputMediaPhoto(
-                        media=fid,
-                        caption=cap,
-                    )
-                    for fid, cap in zip(chunk_photos, chunk_captions)
-                ]
-                await bot.send_media_group(chat_id, media)
+            for fid, caption in zip(all_photos, captions):
+                await bot.send_photo(chat_id, fid, caption=caption)
         except (TelegramBadRequest, TelegramForbiddenError) as exc:
             logger.warning("Failed to notify chat %s: %s", chat_id, exc)

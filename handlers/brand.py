@@ -13,6 +13,7 @@ from database.admin import get_notification_chat_ids
 from database.db import get_session
 from database.models import BrandApplication, User
 from database.reports import add_application_notification
+from database.users import get_or_create_user
 from keyboards.reply import continue_kb, main_menu_kb, phone_request_kb, remove_kb
 from states.forms import BrandStates
 
@@ -33,12 +34,12 @@ WARNING_TEXT = (
 
 @router.message(F.text == "🎁 Brend Ariza")
 async def brand_start(message: Message, state: FSMContext) -> None:
-    # promocode saqlash kerak bo'lsa state data dan olib qoldiramiz
-    data = await state.get_data()
-    promocode = data.get("promocode")
+    user = await get_or_create_user(
+        message.from_user.id,  # type: ignore[union-attr]
+        message.from_user.username,  # type: ignore[union-attr]
+    )
     await state.clear()
-    if promocode:
-        await state.update_data(promocode=promocode)
+    await state.update_data(promocode=user.promocode)
 
     await message.answer(WARNING_TEXT, reply_markup=continue_kb(), parse_mode="HTML")
     await state.set_state(BrandStates.warning_ack)

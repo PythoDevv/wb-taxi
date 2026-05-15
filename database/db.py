@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from config import ADMIN_CHAT_ID, ADMIN_USER_ID, DATABASE_URL
@@ -12,6 +13,15 @@ async def init_db() -> None:
     """Create all tables if they don't exist yet."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(
+            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS promocode VARCHAR(64)")
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                "promocode_asked BOOLEAN DEFAULT false"
+            )
+        )
     await seed_initial_admin_data()
 
 
