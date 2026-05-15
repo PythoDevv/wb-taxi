@@ -217,6 +217,13 @@ async def add_group_finish(message: Message, state: FSMContext) -> None:
     if chat_id is None:
         await message.answer("Chat ID faqat raqam bo'lishi kerak. Qayta yuboring:")
         return
+    if chat_id >= 0:
+        await message.answer(
+            "Bu yerga faqat guruh ID qo'shiladi. Guruh ID odatda <code>-100...</code> "
+            "ko'rinishida bo'ladi.",
+            parse_mode="HTML",
+        )
+        return
 
     title = None
     if message.chat.type in {"group", "supergroup"}:

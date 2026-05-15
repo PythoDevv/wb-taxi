@@ -35,7 +35,7 @@ async def seed_initial_admin_data() -> None:
             if result.scalar_one_or_none() is None:
                 session.add(Admin(telegram_id=ADMIN_USER_ID))
 
-        if ADMIN_CHAT_ID:
+        if ADMIN_CHAT_ID < 0:
             result = await session.execute(
                 select(NotificationChat.id).where(
                     NotificationChat.chat_id == ADMIN_CHAT_ID

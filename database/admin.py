@@ -64,6 +64,9 @@ async def list_admins() -> list[int]:
 
 
 async def add_notification_chat(chat_id: int, title: str | None = None) -> bool:
+    if chat_id >= 0:
+        return False
+
     session = get_session()
     try:
         exists = await session.execute(
@@ -100,7 +103,11 @@ async def remove_notification_chat(chat_id: int) -> bool:
 async def list_notification_chats() -> list[NotificationChat]:
     session = get_session()
     try:
-        result = await session.execute(select(NotificationChat).order_by(NotificationChat.id))
+        result = await session.execute(
+            select(NotificationChat)
+            .where(NotificationChat.chat_id < 0)
+            .order_by(NotificationChat.id)
+        )
         return list(result.scalars().all())
     finally:
         await session.close()
@@ -108,8 +115,8 @@ async def list_notification_chats() -> list[NotificationChat]:
 
 async def get_notification_chat_ids() -> list[int]:
     chats = await list_notification_chats()
-    chat_ids = [chat.chat_id for chat in chats]
-    if not chat_ids and ADMIN_CHAT_ID:
+    chat_ids = [chat.chat_id for chat in chats if chat.chat_id < 0]
+    if not chat_ids and ADMIN_CHAT_ID < 0:
         chat_ids.append(ADMIN_CHAT_ID)
     return chat_ids
 
