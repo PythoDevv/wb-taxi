@@ -13,6 +13,6 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def get_session() -> AsyncSession:
+def get_session() -> AsyncSession:
     """Return a new async session. Caller is responsible for closing it."""
     return async_session_factory()
