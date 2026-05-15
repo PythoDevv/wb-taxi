@@ -12,18 +12,21 @@ FSM steps:
 """
 
 import logging
+from pathlib import Path
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
+    FSInputFile,
     InputMediaPhoto,
     Message,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.admin import get_notification_chat_ids
+from database.assets import get_prompt_image_file_id, save_prompt_image_file_id
 from database.db import get_session
 from database.models import Application, User
 from database.reports import add_application_notification
@@ -32,6 +35,7 @@ from states.forms import DriverStates
 
 router = Router()
 logger = logging.getLogger(__name__)
+IMAGES_DIR = Path(__file__).resolve().parent / "images"
 
 WARNING_TEXT = (
     "⚠️ <b>Diqqat!</b>\n\n"
@@ -91,10 +95,11 @@ async def get_phone_fallback(message: Message) -> None:
 
 @router.message(DriverStates.warning_ack, F.text == "✅ Davom etish")
 async def warning_acked(message: Message, state: FSMContext) -> None:
-    await message.answer(
+    await _send_photo_prompt(
+        message,
+        "passport_front.png",
         "1/12 — <b>Passport (old tarafi)</b> rasmini jo'nating:",
         reply_markup=remove_kb(),
-        parse_mode="HTML",
     )
     await state.set_state(DriverStates.passport_front)
 
@@ -120,27 +125,62 @@ async def _expect_photo(message: Message, next_prompt: str) -> str | None:
     return fid
 
 
+async def _send_photo_prompt(
+    message: Message,
+    image_name: str,
+    caption: str,
+    *,
+    reply_markup=None,
+) -> None:
+    image_path = IMAGES_DIR / image_name
+    cached_file_id = await get_prompt_image_file_id(image_name)
+    if cached_file_id:
+        try:
+            await message.answer_photo(
+                cached_file_id,
+                caption=caption,
+                reply_markup=reply_markup,
+                parse_mode="HTML",
+            )
+            return
+        except TelegramBadRequest as exc:
+            logger.warning("Cached prompt image %s failed: %s", image_name, exc)
+
+    if image_path.exists():
+        sent_message = await message.answer_photo(
+            FSInputFile(image_path),
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+        )
+        if sent_message.photo:
+            await save_prompt_image_file_id(image_name, sent_message.photo[-1].file_id)
+        return
+
+    await message.answer(caption, reply_markup=reply_markup, parse_mode="HTML")
+
+
 # ── Step 4–11: individual document photos ────────────────────────────────────
 
 PHOTO_STEPS = [
-    ("passport_front",    DriverStates.passport_front,    "2/12 — <b>Passport (orqa tarafi)</b> rasmini jo'nating:",              DriverStates.passport_back),
-    ("passport_back",     DriverStates.passport_back,     "3/12 — <b>Haydovchilik guvohnomasi (old tarafi)</b> rasmini jo'nating:", DriverStates.license_front),
-    ("license_front",     DriverStates.license_front,     "4/12 — <b>Haydovchilik guvohnomasi (orqa tarafi)</b> rasmini jo'nating:", DriverStates.license_back),
-    ("license_back",      DriverStates.license_back,      "5/12 — <b>Texnik passport (old tarafi)</b> rasmini jo'nating:",          DriverStates.texpassport_front),
-    ("texpassport_front", DriverStates.texpassport_front, "6/12 — <b>Texnik passport (orqa tarafi)</b> rasmini jo'nating:",         DriverStates.texpassport_back),
-    ("texpassport_back",  DriverStates.texpassport_back,  "7/12 — <b>Selfie</b> rasmingizni jo'nating:",                           DriverStates.selfie),
-    ("selfie",            DriverStates.selfie,            "8/12 — <b>Litsenziya</b> rasmini jo'nating:",                           DriverStates.license_card),
+    ("passport_front",    DriverStates.passport_front,    "passport_back.png",          "2/12 — <b>Passport (orqa tarafi)</b> rasmini jo'nating:",                 DriverStates.passport_back),
+    ("passport_back",     DriverStates.passport_back,     "guvohnoma_old.png",          "3/12 — <b>Haydovchilik guvohnomasi (old tarafi)</b> rasmini jo'nating:",    DriverStates.license_front),
+    ("license_front",     DriverStates.license_front,     "guvohnoma_orqa.png",         "4/12 — <b>Haydovchilik guvohnomasi (orqa tarafi)</b> rasmini jo'nating:",   DriverStates.license_back),
+    ("license_back",      DriverStates.license_back,      "texnik_passport_old.png",    "5/12 — <b>Texnik passport (old tarafi)</b> rasmini jo'nating:",             DriverStates.texpassport_front),
+    ("texpassport_front", DriverStates.texpassport_front, "texnik_passport_orqa.png",   "6/12 — <b>Texnik passport (orqa tarafi)</b> rasmini jo'nating:",            DriverStates.texpassport_back),
+    ("texpassport_back",  DriverStates.texpassport_back,  "selfi.png",                  "7/12 — <b>Selfie</b> rasmingizni jo'nating:",                              DriverStates.selfie),
+    ("selfie",            DriverStates.selfie,            "litsenziga.png",             "8/12 — <b>Litsenziya</b> rasmini jo'nating:",                              DriverStates.license_card),
 ]
 
 
-def _make_photo_handler(field: str, current_state, next_prompt: str, next_state):
+def _make_photo_handler(field: str, current_state, next_image: str, next_prompt: str, next_state):
     """Factory to avoid closure issues inside a loop."""
 
     @router.message(StateFilter(current_state), F.photo)
     async def _handler(message: Message, state: FSMContext) -> None:
         fid = message.photo[-1].file_id  # type: ignore[index]
         await state.update_data(**{field: fid})
-        await message.answer(next_prompt, parse_mode="HTML")
+        await _send_photo_prompt(message, next_image, next_prompt)
         await state.set_state(next_state)
 
     @router.message(StateFilter(current_state))
@@ -150,8 +190,8 @@ def _make_photo_handler(field: str, current_state, next_prompt: str, next_state)
     return _handler, _bad
 
 
-for _field, _cur, _next_prompt, _next_state in PHOTO_STEPS:
-    _make_photo_handler(_field, _cur, _next_prompt, _next_state)
+for _field, _cur, _next_image, _next_prompt, _next_state in PHOTO_STEPS:
+    _make_photo_handler(_field, _cur, _next_image, _next_prompt, _next_state)
 
 
 # ── Step 12 (license_card -> car_photos intro) ────────────────────────────────
@@ -159,10 +199,11 @@ for _field, _cur, _next_prompt, _next_state in PHOTO_STEPS:
 @router.message(DriverStates.license_card, F.photo)
 async def get_license_card(message: Message, state: FSMContext) -> None:
     await state.update_data(license_card=message.photo[-1].file_id, car_photos=[])
-    await message.answer(
+    await _send_photo_prompt(
+        message,
+        "mashina-4-tomoni.png",
         "🚗 <b>9–12/12</b> — Mashinangizning 4 ta tarafidan rasmga olib jo'nating "
         "(old, orqa, chap, o'ng).\n\nHammasini birin-ketin <b>4 ta rasm</b> jo'natishingiz kerak.",
-        parse_mode="HTML",
     )
     await state.set_state(DriverStates.car_photos)
 

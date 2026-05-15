@@ -57,6 +57,20 @@ class ApplicationNotification(Base):
     )
 
 
+class PromptImage(Base):
+    __tablename__ = "prompt_images"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    image_name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    file_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Application(Base):
     __tablename__ = "applications"
 
