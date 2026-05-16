@@ -238,42 +238,42 @@ for _field, _cur, _next_image, _next_prompt, _next_state in PHOTO_STEPS:
 
 # ── Step 13: car_photos (4 photos) ───────────────────────────────────────────
 
-CAR_LABELS = ["old", "orqa", "chap", "o'ng"]
+# CAR_LABELS = ["old", "orqa", "chap", "o'ng"]
 
 
-@router.message(DriverStates.car_photos, F.photo)
-async def collect_car_photos(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    photos: list = data.get("car_photos", [])
-    photos.append(message.photo[-1].file_id)  # type: ignore[index]
-    await state.update_data(car_photos=photos)
+# @router.message(DriverStates.car_photos, F.photo)
+# async def collect_car_photos(message: Message, state: FSMContext) -> None:
+#     data = await state.get_data()
+#     photos: list = data.get("car_photos", [])
+#     photos.append(message.photo[-1].file_id)  # type: ignore[index]
+#     await state.update_data(car_photos=photos)
 
-    received = len(photos)
-    remaining = 4 - received
+#     received = len(photos)
+#     remaining = 4 - received
 
-    if remaining > 0:
-        await message.answer(
-            f"✅ <b>{received}/4</b> ta rasm qabul qilindi. Yana <b>{remaining}</b> ta rasm jo'nating.",
-            parse_mode="HTML",
-        )
-    else:
-        # All 4 received → move to plate_number
-        await message.answer(
-            "🔢 Endi mashinangizning <b>davlat raqamini</b> yozing (masalan: 01A123BC):",
-            parse_mode="HTML",
-        )
-        await state.set_state(DriverStates.plate_number)
+#     if remaining > 0:
+#         await message.answer(
+#             f"✅ <b>{received}/4</b> ta rasm qabul qilindi. Yana <b>{remaining}</b> ta rasm jo'nating.",
+#             parse_mode="HTML",
+#         )
+#     else:
+#         # All 4 received → move to plate_number
+#         await message.answer(
+#             "🔢 Endi mashinangizning <b>davlat raqamini</b> yozing (masalan: 01A123BC):",
+#             parse_mode="HTML",
+#         )
+#         await state.set_state(DriverStates.plate_number)
 
 
-@router.message(DriverStates.car_photos)
-async def car_photos_bad(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    received = len(data.get("car_photos", []))
-    remaining = 4 - received
-    await message.answer(
-        f"Iltimos, rasm jo'nating. Hali <b>{remaining}</b> ta rasm kerak.",
-        parse_mode="HTML",
-    )
+# @router.message(DriverStates.car_photos)
+# async def car_photos_bad(message: Message, state: FSMContext) -> None:
+#     data = await state.get_data()
+#     received = len(data.get("car_photos", []))
+#     remaining = 4 - received
+#     await message.answer(
+#         f"Iltimos, rasm jo'nating. Hali <b>{remaining}</b> ta rasm kerak.",
+#         parse_mode="HTML",
+#     )
 
 
 # ── Step 14: plate_number → save → notify ────────────────────────────────────
