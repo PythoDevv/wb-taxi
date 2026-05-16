@@ -16,10 +16,10 @@ class DriverStates(StatesGroup):
     license_back = State()
     texpassport_front = State()
     texpassport_back = State()
-    selfie = State()
-    license_card = State()
-    car_photos = State()         # 4 ta rasm ketma-ket
-    plate_number = State()
+    # selfie = State()
+    # license_card = State()
+    # car_photos = State()         # 4 ta rasm ketma-ket
+    # plate_number = State()
 
 
 class BrandStates(StatesGroup):

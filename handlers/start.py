@@ -12,8 +12,8 @@ router = Router()
 WELCOME_TEXT = (
     "🚕 <b>Janob Taxi</b> botiga xush kelibsiz!\n\n"
     "Quyidagi menyulardan birini tanlang:\n"
-    "📝 <b>Ulanish uchun Ariza</b> — Haydovchilik uchun ariza\n"
-    "🎁 <b>Brend Ariza</b> — Mashinangizni brendlash uchun ariza"
+    "📝 <b>Ulanish uchun Ariza</b> — Haydovchilik uchun ariza"
+    # "🎁 <b>Brend Ariza</b> — Mashinangizni brendlash uchun ariza"
 )
 
 
@@ -41,14 +41,14 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 async def promo_choice(message: Message, state: FSMContext) -> None:
     text = message.text or ""
 
-    if text == "✅ Ha, bor":
+    if text == "✅ Ha":
         await message.answer(
             "✏️ Iltimos, promocodeni yozing:",
             reply_markup=None,
         )
         await state.set_state(PromoStates.entering_promo)
 
-    elif text == "➡️ Davom etish":
+    elif text == "🚫 Yo'q":
         await set_user_promocode(
             message.from_user.id,  # type: ignore[union-attr]
             message.from_user.username,  # type: ignore[union-attr]

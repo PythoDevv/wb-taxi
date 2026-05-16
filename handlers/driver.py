@@ -167,16 +167,53 @@ async def _send_photo_prompt(
 
 # ── Step 4–11: individual document photos ────────────────────────────────────
 
-PHOTO_STEPS = [
-    ("passport_front",    DriverStates.passport_front,    "passport_back.png",          "2/12 — <b>Passport (orqa tarafi)</b> rasmini jo'nating:",                 DriverStates.passport_back),
-    ("passport_back",     DriverStates.passport_back,     "guvohnoma_old.png",          "3/12 — <b>Haydovchilik guvohnomasi (old tarafi)</b> rasmini jo'nating:",    DriverStates.license_front),
-    ("license_front",     DriverStates.license_front,     "guvohnoma_orqa.png",         "4/12 — <b>Haydovchilik guvohnomasi (orqa tarafi)</b> rasmini jo'nating:",   DriverStates.license_back),
-    ("license_back",      DriverStates.license_back,      "texnik_passport_old.png",    "5/12 — <b>Texnik passport (old tarafi)</b> rasmini jo'nating:",             DriverStates.texpassport_front),
-    ("texpassport_front", DriverStates.texpassport_front, "texnik_passport_orqa.png",   "6/12 — <b>Texnik passport (orqa tarafi)</b> rasmini jo'nating:",            DriverStates.texpassport_back),
-    ("texpassport_back",  DriverStates.texpassport_back,  "selfi.png",                  "7/12 — <b>Selfie</b> rasmingizni jo'nating:",                              DriverStates.selfie),
-    ("selfie",            DriverStates.selfie,            "litsenziga.png",             "8/12 — <b>Litsenziya</b> rasmini jo'nating:",                              DriverStates.license_card),
-]
+# PHOTO_STEPS = [
+#     ("passport_front",    DriverStates.passport_front,    "passport_back.png",          "2/12 — <b>Passport (orqa tarafi)</b> rasmini jo'nating:",                 DriverStates.passport_back),
+#     ("passport_back",     DriverStates.passport_back,     "guvohnoma_old.png",          "3/12 — <b>Haydovchilik guvohnomasi (old tarafi)</b> rasmini jo'nating:",    DriverStates.license_front),
+#     ("license_front",     DriverStates.license_front,     "guvohnoma_orqa.png",         "4/12 — <b>Haydovchilik guvohnomasi (orqa tarafi)</b> rasmini jo'nating:",   DriverStates.license_back),
+#     ("license_back",      DriverStates.license_back,      "texnik_passport_old.png",    "5/12 — <b>Texnik passport (old tarafi)</b> rasmini jo'nating:",             DriverStates.texpassport_front),
+#     ("texpassport_front", DriverStates.texpassport_front, "texnik_passport_orqa.png",   "6/12 — <b>Texnik passport (orqa tarafi)</b> rasmini jo'nating:",            DriverStates.texpassport_back),
+#     ("texpassport_back",  DriverStates.texpassport_back,  "selfi.png",                  "7/12 — <b>Selfie</b> rasmingizni jo'nating:",                              DriverStates.selfie),
+#     ("selfie",            DriverStates.selfie,            "litsenziga.png",             "8/12 — <b>Litsenziya</b> rasmini jo'nating:",                              DriverStates.license_card),
+# ]
 
+PHOTO_STEPS = [
+    (
+        "passport_front",
+        DriverStates.passport_front,
+        "passport_back.png",
+        "2/6 — <b>Passport (orqa tarafi)</b> rasmini jo'nating:",
+        DriverStates.passport_back,
+    ),
+    (
+        "passport_back",
+        DriverStates.passport_back,
+        "guvohnoma_old.png",
+        "3/6 — <b>Haydovchilik guvohnomasi (old tarafi)</b> rasmini jo'nating:",
+        DriverStates.license_front,
+    ),
+    (
+        "license_front",
+        DriverStates.license_front,
+        "guvohnoma_orqa.png",
+        "4/6 — <b>Haydovchilik guvohnomasi (orqa tarafi)</b> rasmini jo'nating:",
+        DriverStates.license_back,
+    ),
+    (
+        "license_back",
+        DriverStates.license_back,
+        "texnik_passport_old.png",
+        "5/6 — <b>Texnik passport (old tarafi)</b> rasmini jo'nating:",
+        DriverStates.texpassport_front,
+    ),
+    (
+        "texpassport_front",
+        DriverStates.texpassport_front,
+        "texnik_passport_orqa.png",
+        "6/6 — <b>Texnik passport (orqa tarafi)</b> rasmini jo'nating:",
+        DriverStates.texpassport_back,
+    ),
+]
 
 def _make_photo_handler(field: str, current_state, next_image: str, next_prompt: str, next_state):
     """Factory to avoid closure issues inside a loop."""
@@ -197,25 +234,6 @@ def _make_photo_handler(field: str, current_state, next_image: str, next_prompt:
 
 for _field, _cur, _next_image, _next_prompt, _next_state in PHOTO_STEPS:
     _make_photo_handler(_field, _cur, _next_image, _next_prompt, _next_state)
-
-
-# ── Step 12 (license_card -> car_photos intro) ────────────────────────────────
-
-@router.message(DriverStates.license_card, F.photo)
-async def get_license_card(message: Message, state: FSMContext) -> None:
-    await state.update_data(license_card=message.photo[-1].file_id, car_photos=[])
-    await _send_photo_prompt(
-        message,
-        "mashina-4-tomoni.png",
-        "🚗 <b>9–12/12</b> — Mashinangizning 4 ta tarafidan rasmga olib jo'nating "
-        "(old, orqa, chap, o'ng).\n\nHammasini birin-ketin <b>4 ta rasm</b> jo'natishingiz kerak.",
-    )
-    await state.set_state(DriverStates.car_photos)
-
-
-@router.message(DriverStates.license_card)
-async def license_card_bad(message: Message) -> None:
-    await message.answer("Iltimos, rasm jo'nating (foto shaklida).")
 
 
 # ── Step 13: car_photos (4 photos) ───────────────────────────────────────────
@@ -260,92 +278,242 @@ async def car_photos_bad(message: Message, state: FSMContext) -> None:
 
 # ── Step 14: plate_number → save → notify ────────────────────────────────────
 
-@router.message(DriverStates.plate_number)
-async def get_plate_number(message: Message, state: FSMContext, bot: Bot) -> None:
-    plate = (message.text or "").strip().upper()
-    if not plate:
-        await message.answer("Davlat raqami bo'sh bo'lmasligi kerak. Qayta yozing:")
-        return
+# @router.message(DriverStates.plate_number)
+# async def get_plate_number(message: Message, state: FSMContext, bot: Bot) -> None:
+#     plate = (message.text or "").strip().upper()
+#     if not plate:
+#         await message.answer("Davlat raqami bo'sh bo'lmasligi kerak. Qayta yozing:")
+#         return
 
-    await state.update_data(plate_number=plate)
+#     await state.update_data(plate_number=plate)
+#     data = await state.get_data()
+
+#     # ── Persist to DB ──────────────────────────────────────────────────────────
+#     session: AsyncSession = get_session()
+#     try:
+#         from sqlalchemy import select
+
+#         result = await session.execute(
+#             select(User).where(User.telegram_id == message.from_user.id)  # type: ignore[union-attr]
+#         )
+#         user = result.scalar_one_or_none()
+#         if user is None:
+#             user = User(
+#                 telegram_id=message.from_user.id,  # type: ignore[union-attr]
+#                 username=message.from_user.username,  # type: ignore[union-attr]
+#             )
+#             session.add(user)
+#             await session.flush()
+
+#         car_photos: list = data.get("car_photos", [])
+#         app = Application(
+#             user_id=user.id,
+#             full_name=data["full_name"],
+#             phone=data["phone"],
+#             promocode=data.get("promocode"),
+#             passport_front_id=data["passport_front"],
+#             passport_back_id=data["passport_back"],
+#             license_front_id=data["license_front"],
+#             license_back_id=data["license_back"],
+#             texpassport_front_id=data["texpassport_front"],
+#             texpassport_back_id=data["texpassport_back"],
+#             selfie_id=data["selfie"],
+#             license_card_id=data["license_card"],
+#             car_photo_1_id=car_photos[0],
+#             car_photo_2_id=car_photos[1],
+#             car_photo_3_id=car_photos[2],
+#             car_photo_4_id=car_photos[3],
+#             plate_number=plate,
+#             status="new",
+#         )
+#         session.add(app)
+#         await session.flush()
+#         application_id = app.id
+#         await session.commit()
+#     except Exception:
+#         await session.rollback()
+#         raise
+#     finally:
+#         await session.close()
+
+#     await state.clear()
+
+#     # ── Notify admin ───────────────────────────────────────────────────────────
+#     await _notify_admin(bot, application_id, data, plate)
+
+#     # ── Success message ────────────────────────────────────────────────────────
+#     await message.answer(
+#         "🎉 <b>Tabriklaymiz!</b>\n\n"
+#         "Arizangiz qabul qilindi. Tez orada operatorlarimiz tomonidan "
+#         "ko'rib chiqilib, qayta javob yozib yuboriladi.",
+#         parse_mode="HTML",
+#         reply_markup=main_menu_kb(),
+#     )
+
+
+# # ── Admin notification ────────────────────────────────────────────────────────
+
+# async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -> None:
+#     promo_line = f"🎟 Promocode: <code>{data.get('promocode')}</code>" if data.get("promocode") else "🎟 Promocode: yo'q"
+
+#     summary = (
+#         "📋 <b>Yangi haydovchi arizasi!</b>\n\n"
+#         f"👤 F.I.O: {data['full_name']}\n"
+#         f"📞 Telefon: {data['phone']}\n"
+#         f"🚘 Davlat raqami: <code>{plate}</code>\n"
+#         f"{promo_line}"
+#     )
+#     car_photos: list = data.get("car_photos", [])
+#     all_photos = [
+#         data["passport_front"],
+#         data["passport_back"],
+#         data["license_front"],
+#         data["license_back"],
+#         data["texpassport_front"],
+#         data["texpassport_back"],
+#         data["selfie"],
+#         data["license_card"],
+#         *car_photos,
+#     ]
+
+#     captions = [
+#         "Passport (old)",
+#         "Passport (orqa)",
+#         "Guvohnoma (old)",
+#         "Guvohnoma (orqa)",
+#         "Tex. passport (old)",
+#         "Tex. passport (orqa)",
+#         "Selfie",
+#         "Litsenziya",
+#         "Mashina — old",
+#         "Mashina — orqa",
+#         "Mashina — chap",
+#         "Mashina — o'ng",
+#     ]
+
+#     for chat_id in await get_notification_chat_ids():
+#         try:
+#             summary_message = await bot.send_message(chat_id, summary, parse_mode="HTML")
+#             await add_application_notification(
+#                 "driver",
+#                 application_id,
+#                 chat_id,
+#                 summary_message.message_id,
+#             )
+
+#             for fid, caption in zip(all_photos, captions):
+#                 await bot.send_photo(chat_id, fid, caption=caption)
+#         except (TelegramBadRequest, TelegramForbiddenError) as exc:
+#             logger.warning("Failed to notify chat %s: %s", chat_id, exc)
+
+@router.message(DriverStates.texpassport_back, F.photo)
+async def finish_application(
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+) -> None:
+    await state.update_data(
+        texpassport_back=message.photo[-1].file_id
+    )
+
     data = await state.get_data()
 
-    # ── Persist to DB ──────────────────────────────────────────────────────────
     session: AsyncSession = get_session()
+
     try:
         from sqlalchemy import select
 
         result = await session.execute(
-            select(User).where(User.telegram_id == message.from_user.id)  # type: ignore[union-attr]
+            select(User).where(
+                User.telegram_id == message.from_user.id
+            )
         )
+
         user = result.scalar_one_or_none()
+
         if user is None:
             user = User(
-                telegram_id=message.from_user.id,  # type: ignore[union-attr]
-                username=message.from_user.username,  # type: ignore[union-attr]
+                telegram_id=message.from_user.id,
+                username=message.from_user.username,
             )
             session.add(user)
             await session.flush()
 
-        car_photos: list = data.get("car_photos", [])
         app = Application(
             user_id=user.id,
             full_name=data["full_name"],
             phone=data["phone"],
             promocode=data.get("promocode"),
+
             passport_front_id=data["passport_front"],
             passport_back_id=data["passport_back"],
+
             license_front_id=data["license_front"],
             license_back_id=data["license_back"],
+
             texpassport_front_id=data["texpassport_front"],
             texpassport_back_id=data["texpassport_back"],
-            selfie_id=data["selfie"],
-            license_card_id=data["license_card"],
-            car_photo_1_id=car_photos[0],
-            car_photo_2_id=car_photos[1],
-            car_photo_3_id=car_photos[2],
-            car_photo_4_id=car_photos[3],
-            plate_number=plate,
+
             status="new",
         )
+
         session.add(app)
+
         await session.flush()
+
         application_id = app.id
+
         await session.commit()
+
     except Exception:
         await session.rollback()
         raise
+
     finally:
         await session.close()
 
     await state.clear()
 
-    # ── Notify admin ───────────────────────────────────────────────────────────
-    await _notify_admin(bot, application_id, data, plate)
+    await _notify_admin(
+        bot,
+        application_id,
+        data,
+    )
 
-    # ── Success message ────────────────────────────────────────────────────────
     await message.answer(
         "🎉 <b>Tabriklaymiz!</b>\n\n"
-        "Arizangiz qabul qilindi. Tez orada operatorlarimiz tomonidan "
-        "ko'rib chiqilib, qayta javob yozib yuboriladi.",
+        "Arizangiz qabul qilindi.",
         parse_mode="HTML",
         reply_markup=main_menu_kb(),
     )
 
 
-# ── Admin notification ────────────────────────────────────────────────────────
+@router.message(DriverStates.texpassport_back)
+async def texpassport_back_bad(message: Message) -> None:
+    await message.answer(
+        "Iltimos, rasm jo'nating."
+    )
 
-async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -> None:
-    promo_line = f"🎟 Promocode: <code>{data.get('promocode')}</code>" if data.get("promocode") else "🎟 Promocode: yo'q"
+
+async def _notify_admin(
+    bot: Bot,
+    application_id: int,
+    data: dict,
+) -> None:
+
+    promo_line = (
+        f"🎟 Promocode: <code>{data.get('promocode')}</code>"
+        if data.get("promocode")
+        else "🎟 Promocode: yo'q"
+    )
 
     summary = (
         "📋 <b>Yangi haydovchi arizasi!</b>\n\n"
         f"👤 F.I.O: {data['full_name']}\n"
         f"📞 Telefon: {data['phone']}\n"
-        f"🚘 Davlat raqami: <code>{plate}</code>\n"
         f"{promo_line}"
     )
-    car_photos: list = data.get("car_photos", [])
+
     all_photos = [
         data["passport_front"],
         data["passport_back"],
@@ -353,9 +521,6 @@ async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -
         data["license_back"],
         data["texpassport_front"],
         data["texpassport_back"],
-        data["selfie"],
-        data["license_card"],
-        *car_photos,
     ]
 
     captions = [
@@ -365,17 +530,16 @@ async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -
         "Guvohnoma (orqa)",
         "Tex. passport (old)",
         "Tex. passport (orqa)",
-        "Selfie",
-        "Litsenziya",
-        "Mashina — old",
-        "Mashina — orqa",
-        "Mashina — chap",
-        "Mashina — o'ng",
     ]
 
     for chat_id in await get_notification_chat_ids():
         try:
-            summary_message = await bot.send_message(chat_id, summary, parse_mode="HTML")
+            summary_message = await bot.send_message(
+                chat_id,
+                summary,
+                parse_mode="HTML",
+            )
+
             await add_application_notification(
                 "driver",
                 application_id,
@@ -384,6 +548,18 @@ async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -
             )
 
             for fid, caption in zip(all_photos, captions):
-                await bot.send_photo(chat_id, fid, caption=caption)
-        except (TelegramBadRequest, TelegramForbiddenError) as exc:
-            logger.warning("Failed to notify chat %s: %s", chat_id, exc)
+                await bot.send_photo(
+                    chat_id,
+                    fid,
+                    caption=caption,
+                )
+
+        except (
+            TelegramBadRequest,
+            TelegramForbiddenError,
+        ) as exc:
+            logger.warning(
+                "Failed to notify chat %s: %s",
+                chat_id,
+                exc,
+            )

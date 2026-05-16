@@ -10,7 +10,7 @@ def main_menu_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📝 Ulanish uchun Ariza")],
-            [KeyboardButton(text="🎁 Brend Ariza")],
+            # [KeyboardButton(text="🎁 Brend Ariza")],
         ],
         resize_keyboard=True,
     )
@@ -22,8 +22,8 @@ def promo_question_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="✅ Ha, bor"),
-                KeyboardButton(text="➡️ Davom etish"),
+                KeyboardButton(text="✅ Ha"),
+                KeyboardButton(text="🚫 Yo'q"),
             ]
         ],
         resize_keyboard=True,
