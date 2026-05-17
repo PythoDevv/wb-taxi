@@ -22,6 +22,9 @@ async def init_db() -> None:
                 "promocode_asked BOOLEAN DEFAULT false"
             )
         )
+        await conn.execute(
+            text("ALTER TABLE applications ALTER COLUMN plate_number DROP NOT NULL")
+        )
     await seed_initial_admin_data()
 
 

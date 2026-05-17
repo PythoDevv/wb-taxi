@@ -75,7 +75,7 @@ def application_rows_to_values(rows: list[ReportRow]) -> list[list[Any]]:
                 row.full_name,
                 row.phone,
                 row.promocode or "",
-                row.plate_number,
+                row.plate_number or "",
                 row.status,
                 _format_dt(row.created_at),
                 row.car_model or "",

@@ -99,7 +99,7 @@ class Application(Base):
     # car_photo_3_id: Mapped[str] = mapped_column(String(256), nullable=False)
     # car_photo_4_id: Mapped[str] = mapped_column(String(256), nullable=False)
 
-    plate_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    plate_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="new", server_default="new")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

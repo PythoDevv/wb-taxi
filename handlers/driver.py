@@ -6,9 +6,7 @@ FSM steps:
   passport_front -> passport_back ->
   license_front  -> license_back  ->
   texpassport_front -> texpassport_back ->
-  selfie -> license_card ->
-  car_photos (4 photos, counted in FSM data) ->
-  plate_number -> [save + notify admin]
+  [save + notify admin]
 """
 
 import logging
@@ -165,7 +163,7 @@ async def _send_photo_prompt(
     await message.answer(caption, reply_markup=reply_markup, parse_mode="HTML")
 
 
-# ── Step 4–11: individual document photos ────────────────────────────────────
+# ── Step 4–6: individual document photos ─────────────────────────────────────
 
 # PHOTO_STEPS = [
 #     ("passport_front",    DriverStates.passport_front,    "passport_back.png",          "2/12 — <b>Passport (orqa tarafi)</b> rasmini jo'nating:",                 DriverStates.passport_back),

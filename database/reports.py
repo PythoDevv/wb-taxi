@@ -39,7 +39,7 @@ class ReportRow:
     full_name: str
     phone: str
     promocode: str | None
-    plate_number: str
+    plate_number: str | None
     status: str
     created_at: datetime | None
     car_model: str | None = None
