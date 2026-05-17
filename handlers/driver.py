@@ -29,6 +29,7 @@ from database.models import Application, User
 from database.reports import add_application_notification
 from database.users import get_or_create_user
 from keyboards.reply import continue_kb, main_menu_kb, phone_request_kb, remove_kb
+from services.google_sheets import schedule_google_sheets_sync
 from states.forms import DriverStates
 
 router = Router()
@@ -484,6 +485,7 @@ async def finish_application(
         application_id,
         data,
     )
+    schedule_google_sheets_sync(f"driver:{application_id}")
 
 
 @router.message(DriverStates.texpassport_back)

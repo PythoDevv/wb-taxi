@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -20,8 +21,11 @@ from database.reports import (
     get_user_report_rows,
 )
 
+logger = logging.getLogger(__name__)
+
 INVALID_SHEET_TITLE_CHARS = re.compile(r"[\[\]\*\?/\\:]")
 MAX_SHEET_TITLE_LENGTH = 100
+DEFAULT_SYNC_INTERVAL_SECONDS = 60 * 60
 
 USER_HEADERS = [
     "telegram_id",
@@ -42,6 +46,9 @@ class SheetsSyncResult:
     ok: bool
     message: str
     worksheet_count: int = 0
+
+
+_sync_lock = asyncio.Lock()
 
 
 def google_sheets_configured() -> bool:
@@ -179,25 +186,82 @@ def _sync_all_to_google(
 
 
 async def sync_reports_to_google_sheets() -> SheetsSyncResult:
-    application_rows = await get_application_report_rows()
-    user_rows = await get_user_report_rows()
-    statistics_rows = await get_statistics_rows()
-    promocodes = await get_promocodes()
-    promocode_rows = {
-        promocode: await get_application_report_rows(promocode)
-        for promocode in promocodes
-    }
-
-    try:
-        return await asyncio.to_thread(
-            _sync_all_to_google,
-            application_rows,
-            user_rows,
-            statistics_rows,
-            promocode_rows,
-        )
-    except Exception as exc:
+    if _sync_lock.locked():
         return SheetsSyncResult(
             ok=False,
-            message=f"Google Sheets sync xato berdi: {exc}",
+            message="Google Sheets sync allaqachon ishlayapti.",
+        )
+
+    async with _sync_lock:
+        application_rows = await get_application_report_rows()
+        user_rows = await get_user_report_rows()
+        statistics_rows = await get_statistics_rows()
+        promocodes = await get_promocodes()
+        promocode_rows = {
+            promocode: await get_application_report_rows(promocode)
+            for promocode in promocodes
+        }
+
+        try:
+            return await asyncio.to_thread(
+                _sync_all_to_google,
+                application_rows,
+                user_rows,
+                statistics_rows,
+                promocode_rows,
+            )
+        except Exception as exc:
+            return SheetsSyncResult(
+                ok=False,
+                message=f"Google Sheets sync xato berdi: {exc}",
+            )
+
+
+async def _run_background_sync(reason: str, sync_func=sync_reports_to_google_sheets) -> None:
+    result = await sync_func()
+    if result.ok:
+        logger.info(
+            "Google Sheets background sync completed (%s): %s worksheets",
+            reason,
+            result.worksheet_count,
+        )
+        return
+
+    logger.warning(
+        "Google Sheets background sync failed (%s): %s",
+        reason,
+        result.message,
+    )
+
+
+def schedule_google_sheets_sync(
+    reason: str,
+    sync_func=sync_reports_to_google_sheets,
+) -> asyncio.Task | None:
+    if not google_sheets_configured() and sync_func is sync_reports_to_google_sheets:
+        logger.info("Google Sheets sync skipped (%s): not configured", reason)
+        return None
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.warning("Google Sheets sync skipped (%s): no running event loop", reason)
+        return None
+
+    return loop.create_task(_run_background_sync(reason, sync_func=sync_func))
+
+
+async def run_periodic_google_sheets_sync(
+    interval_seconds: int = DEFAULT_SYNC_INTERVAL_SECONDS,
+    sync_func=sync_reports_to_google_sheets,
+    sleep_func=asyncio.sleep,
+) -> None:
+    while True:
+        await sleep_func(interval_seconds)
+        if not google_sheets_configured() and sync_func is sync_reports_to_google_sheets:
+            logger.info("Google Sheets periodic sync skipped: not configured")
+            continue
+        await _run_background_sync(
+            "periodic",
+            sync_func=sync_func,
         )

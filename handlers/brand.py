@@ -15,6 +15,7 @@ from database.models import BrandApplication, User
 from database.reports import add_application_notification
 from database.users import get_or_create_user
 from keyboards.reply import continue_kb, main_menu_kb, phone_request_kb, remove_kb
+from services.google_sheets import schedule_google_sheets_sync
 from states.forms import BrandStates
 
 router = Router()
@@ -192,6 +193,7 @@ async def brand_plate(message: Message, state: FSMContext, bot: Bot) -> None:
     )
 
     await _notify_admin(bot, application_id, data)
+    schedule_google_sheets_sync(f"brand:{application_id}")
 
 
 async def _notify_admin(bot: Bot, application_id: int, data: dict) -> None:
