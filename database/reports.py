@@ -21,6 +21,12 @@ APPLICATION_HEADERS = [
     "phone",
     "promocode",
     "plate_number",
+    "passport_front",
+    "passport_back",
+    "license_front",
+    "license_back",
+    "texpassport_front",
+    "texpassport_back",
     "status",
     "created_at",
     "car_model",
@@ -42,6 +48,12 @@ class ReportRow:
     plate_number: str | None
     status: str
     created_at: datetime | None
+    passport_front: bool = False
+    passport_back: bool = False
+    license_front: bool = False
+    license_back: bool = False
+    texpassport_front: bool = False
+    texpassport_back: bool = False
     car_model: str | None = None
     car_year: str | None = None
     car_color: str | None = None
@@ -91,6 +103,12 @@ async def get_application_report_rows(promocode: str | None = None) -> list[Repo
                     phone=app.phone,
                     promocode=app.promocode,
                     plate_number=app.plate_number,
+                    passport_front=bool(app.passport_front_id),
+                    passport_back=bool(app.passport_back_id),
+                    license_front=bool(app.license_front_id),
+                    license_back=bool(app.license_back_id),
+                    texpassport_front=bool(app.texpassport_front_id),
+                    texpassport_back=bool(app.texpassport_back_id),
                     status=app.status,
                     created_at=app.created_at,
                 )

@@ -59,6 +59,7 @@ def admin_menu_kb() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="➕ Admin qo'shish"), KeyboardButton(text="➖ Admin o'chirish")],
             [KeyboardButton(text="➕ Guruh qo'shish"), KeyboardButton(text="➖ Guruh o'chirish")],
             [KeyboardButton(text="📊 Promocode export"), KeyboardButton(text="🔄 Google Sheets sync")],
+            [KeyboardButton(text="📥 Arizalar export")],
             [KeyboardButton(text="🔎 User qidirish"), KeyboardButton(text="🔗 Ariza xabari")],
             [KeyboardButton(text="📋 Ro'yxatlar"), KeyboardButton(text="📣 Hammaga xabar")],
             [KeyboardButton(text="🏠 Asosiy menyu")],

@@ -1,8 +1,26 @@
+from dataclasses import dataclass
+
 from sqlalchemy import delete, func, select
 
 from config import ADMIN_CHAT_ID
 from database.db import get_session
-from database.models import Admin, NotificationChat, User
+from database.models import (
+    Admin,
+    Application,
+    ApplicationNotification,
+    BrandApplication,
+    NotificationChat,
+    User,
+)
+
+
+@dataclass(slots=True)
+class DeleteUserResult:
+    found: bool
+    telegram_id: int
+    driver_applications: int = 0
+    brand_applications: int = 0
+    notifications: int = 0
 
 
 async def is_admin(telegram_id: int) -> bool:
@@ -126,5 +144,63 @@ async def list_user_chat_ids() -> list[int]:
     try:
         result = await session.execute(select(User.telegram_id).order_by(User.id))
         return list(result.scalars().all())
+    finally:
+        await session.close()
+
+
+async def delete_bot_user(telegram_id: int) -> DeleteUserResult:
+    session = get_session()
+    try:
+        user_result = await session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        user = user_result.scalar_one_or_none()
+        if user is None:
+            return DeleteUserResult(found=False, telegram_id=telegram_id)
+
+        driver_result = await session.execute(
+            select(Application.id).where(Application.user_id == user.id)
+        )
+        driver_ids = list(driver_result.scalars().all())
+
+        brand_result = await session.execute(
+            select(BrandApplication.id).where(BrandApplication.user_id == user.id)
+        )
+        brand_ids = list(brand_result.scalars().all())
+
+        notifications = 0
+        if driver_ids:
+            deleted = await session.execute(
+                delete(ApplicationNotification)
+                .where(ApplicationNotification.application_type == "driver")
+                .where(ApplicationNotification.application_id.in_(driver_ids))
+            )
+            notifications += deleted.rowcount or 0
+
+        if brand_ids:
+            deleted = await session.execute(
+                delete(ApplicationNotification)
+                .where(ApplicationNotification.application_type == "brand")
+                .where(ApplicationNotification.application_id.in_(brand_ids))
+            )
+            notifications += deleted.rowcount or 0
+
+        await session.execute(delete(Application).where(Application.user_id == user.id))
+        await session.execute(
+            delete(BrandApplication).where(BrandApplication.user_id == user.id)
+        )
+        await session.execute(delete(User).where(User.id == user.id))
+        await session.commit()
+
+        return DeleteUserResult(
+            found=True,
+            telegram_id=telegram_id,
+            driver_applications=len(driver_ids),
+            brand_applications=len(brand_ids),
+            notifications=notifications,
+        )
+    except Exception:
+        await session.rollback()
+        raise
     finally:
         await session.close()

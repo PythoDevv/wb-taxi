@@ -183,15 +183,15 @@ async def brand_plate(message: Message, state: FSMContext, bot: Bot) -> None:
         await session.close()
 
     await state.clear()
-    await _notify_admin(bot, application_id, data, plate)
 
     await message.answer(
         "🎉 <b>Tabriklaymiz!</b>\n\n"
-        "Brend arizangiz qabul qilindi. Tez orada operatorlarimiz tomonidan "
-        "ko'rib chiqilib, qayta javob yozib yuboriladi.",
+        "Brend arizangiz qabul qilindi. Janob Taxi admini tez orada aloqaga chiqadi.",
         parse_mode="HTML",
         reply_markup=main_menu_kb(),
     )
+
+    await _notify_admin(bot, application_id, data, plate)
 
 
 async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -> None:

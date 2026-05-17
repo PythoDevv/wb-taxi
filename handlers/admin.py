@@ -5,11 +5,18 @@ from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BufferedInputFile, Message
+from aiogram.types import (
+    BufferedInputFile,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 from database.admin import (
     add_admin,
     add_notification_chat,
+    delete_bot_user,
     is_admin,
     list_admins,
     list_notification_chats,
@@ -54,6 +61,16 @@ def _parse_application_ref(text: str | None) -> tuple[str, int] | None:
         return None
 
 
+def _parse_callback_telegram_id(data: str | None, prefix: str) -> int | None:
+    value = data or ""
+    if not value.startswith(prefix):
+        return None
+    try:
+        return int(value.removeprefix(prefix))
+    except ValueError:
+        return None
+
+
 def _format_dt(value) -> str:
     if value is None:
         return ""
@@ -61,6 +78,9 @@ def _format_dt(value) -> str:
 
 
 def _report_row_to_csv_row(row: ReportRow) -> list[str | int]:
+    def yes_no(value: bool) -> str:
+        return "bor" if value else "yoq"
+
     return [
         row.application_type,
         row.application_id,
@@ -71,6 +91,12 @@ def _report_row_to_csv_row(row: ReportRow) -> list[str | int]:
         row.phone,
         row.promocode or "",
         row.plate_number or "",
+        yes_no(row.passport_front),
+        yes_no(row.passport_back),
+        yes_no(row.license_front),
+        yes_no(row.license_back),
+        yes_no(row.texpassport_front),
+        yes_no(row.texpassport_back),
         row.status,
         _format_dt(row.created_at),
         row.car_model or "",
@@ -111,6 +137,36 @@ def _telegram_message_link(chat_id: int, message_id: int) -> str | None:
     return None
 
 
+def _delete_user_kb(telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🗑 Userni o'chirish",
+                    callback_data=f"delete_user:{telegram_id}",
+                )
+            ]
+        ]
+    )
+
+
+def _confirm_delete_user_kb(telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Ha, o'chirish",
+                    callback_data=f"confirm_delete_user:{telegram_id}",
+                ),
+                InlineKeyboardButton(
+                    text="❌ Bekor qilish",
+                    callback_data=f"cancel_delete_user:{telegram_id}",
+                ),
+            ]
+        ]
+    )
+
+
 async def _is_current_user_admin(message: Message) -> bool:
     if message.from_user is None:
         return False
@@ -121,6 +177,13 @@ async def _deny_if_not_admin(message: Message) -> bool:
     if await _is_current_user_admin(message):
         return False
     await message.answer("Bu bo'lim faqat adminlar uchun.")
+    return True
+
+
+async def _deny_if_not_admin_callback(query: CallbackQuery) -> bool:
+    if await is_admin(query.from_user.id):
+        return False
+    await query.answer("Bu bo'lim faqat adminlar uchun.", show_alert=True)
     return True
 
 
@@ -331,6 +394,24 @@ async def promocode_export_finish(message: Message, state: FSMContext) -> None:
     )
 
 
+@router.message(F.text == "📥 Arizalar export")
+async def applications_export(message: Message) -> None:
+    if await _deny_if_not_admin(message):
+        return
+
+    rows = await get_application_report_rows()
+    if not rows:
+        await message.answer("Ariza topilmadi.", reply_markup=admin_menu_kb())
+        return
+
+    excel_file = _build_excel_file(rows, "applications.xlsx")
+    await message.answer_document(
+        excel_file,
+        caption=f"Arizalar soni: {len(rows)}",
+        reply_markup=admin_menu_kb(),
+    )
+
+
 @router.message(F.text == "🔎 User qidirish")
 async def user_lookup_start(message: Message, state: FSMContext) -> None:
     if await _deny_if_not_admin(message):
@@ -377,6 +458,71 @@ async def user_lookup_finish(message: Message, state: FSMContext) -> None:
 
     await message.answer(
         "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=admin_menu_kb(),
+    )
+    await message.answer(
+        "User bo'yicha amal:",
+        reply_markup=_delete_user_kb(user.telegram_id),
+    )
+
+
+@router.callback_query(F.data.startswith("delete_user:"))
+async def user_delete_confirm(query: CallbackQuery) -> None:
+    if await _deny_if_not_admin_callback(query):
+        return
+
+    telegram_id = _parse_callback_telegram_id(query.data, "delete_user:")
+    if telegram_id is None:
+        await query.answer("Telegram ID noto'g'ri.", show_alert=True)
+        return
+
+    await query.answer()
+    if query.message:
+        await query.message.answer(
+            f"<code>{telegram_id}</code> useri va uning arizalari o'chirilsinmi?",
+            parse_mode="HTML",
+            reply_markup=_confirm_delete_user_kb(telegram_id),
+        )
+
+
+@router.callback_query(F.data.startswith("cancel_delete_user:"))
+async def user_delete_cancel(query: CallbackQuery) -> None:
+    if await _deny_if_not_admin_callback(query):
+        return
+    await query.answer("Bekor qilindi.")
+    if query.message:
+        await query.message.answer(
+            "User o'chirish bekor qilindi.",
+            reply_markup=admin_menu_kb(),
+        )
+
+
+@router.callback_query(F.data.startswith("confirm_delete_user:"))
+async def user_delete_finish(query: CallbackQuery) -> None:
+    if await _deny_if_not_admin_callback(query):
+        return
+
+    telegram_id = _parse_callback_telegram_id(query.data, "confirm_delete_user:")
+    if telegram_id is None:
+        await query.answer("Telegram ID noto'g'ri.", show_alert=True)
+        return
+
+    result = await delete_bot_user(telegram_id)
+    await query.answer()
+    if not query.message:
+        return
+
+    if not result.found:
+        await query.message.answer("User topilmadi.", reply_markup=admin_menu_kb())
+        return
+
+    await query.message.answer(
+        "User o'chirildi.\n"
+        f"Telegram ID: <code>{result.telegram_id}</code>\n"
+        f"Driver arizalar: {result.driver_applications}\n"
+        f"Brand arizalar: {result.brand_applications}\n"
+        f"Guruh xabar linklari: {result.notifications}",
         parse_mode="HTML",
         reply_markup=admin_menu_kb(),
     )

@@ -472,17 +472,17 @@ async def finish_application(
 
     await state.clear()
 
+    await message.answer(
+        "🎉 <b>Tabriklaymiz!</b>\n\n"
+        "Arizangiz qabul qilindi. Janob Taxi admini tez orada aloqaga chiqadi.",
+        parse_mode="HTML",
+        reply_markup=main_menu_kb(),
+    )
+
     await _notify_admin(
         bot,
         application_id,
         data,
-    )
-
-    await message.answer(
-        "🎉 <b>Tabriklaymiz!</b>\n\n"
-        "Arizangiz qabul qilindi.",
-        parse_mode="HTML",
-        reply_markup=main_menu_kb(),
     )
 
 
