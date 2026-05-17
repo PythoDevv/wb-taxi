@@ -191,10 +191,10 @@ async def brand_plate(message: Message, state: FSMContext, bot: Bot) -> None:
         reply_markup=main_menu_kb(),
     )
 
-    await _notify_admin(bot, application_id, data, plate)
+    await _notify_admin(bot, application_id, data)
 
 
-async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -> None:
+async def _notify_admin(bot: Bot, application_id: int, data: dict) -> None:
     promo_line = (
         f"🎟 Promocode: <code>{data.get('promocode')}</code>"
         if data.get("promocode")
@@ -207,7 +207,6 @@ async def _notify_admin(bot: Bot, application_id: int, data: dict, plate: str) -
         f"🚗 Rusum: {data['car_model']}\n"
         f"📅 Yili: {data['car_year']}\n"
         f"🎨 Rang: {data['car_color']}\n"
-        f"🚘 Davlat raqami: <code>{plate}</code>\n"
         f"{promo_line}"
     )
     for chat_id in await get_notification_chat_ids():

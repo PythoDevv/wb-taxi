@@ -75,7 +75,6 @@ def application_rows_to_values(rows: list[ReportRow]) -> list[list[Any]]:
                 row.full_name,
                 row.phone,
                 row.promocode or "",
-                row.plate_number or "",
                 "bor" if row.passport_front else "yoq",
                 "bor" if row.passport_back else "yoq",
                 "bor" if row.license_front else "yoq",

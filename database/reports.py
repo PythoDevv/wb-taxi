@@ -20,7 +20,6 @@ APPLICATION_HEADERS = [
     "full_name",
     "phone",
     "promocode",
-    "plate_number",
     "passport_front",
     "passport_back",
     "license_front",

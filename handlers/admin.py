@@ -90,7 +90,6 @@ def _report_row_to_csv_row(row: ReportRow) -> list[str | int]:
         row.full_name,
         row.phone,
         row.promocode or "",
-        row.plate_number or "",
         yes_no(row.passport_front),
         yes_no(row.passport_back),
         yes_no(row.license_front),
@@ -448,8 +447,7 @@ async def user_lookup_finish(message: Message, state: FSMContext) -> None:
         for row in rows[:20]:
             lines.append(
                 f"- {row.application_type}:{row.application_id} | "
-                f"{row.full_name} | {row.phone} | promo: {row.promocode or 'yoq'} | "
-                f"raqam: {row.plate_number or 'yoq'}"
+                f"{row.full_name} | {row.phone} | promo: {row.promocode or 'yoq'}"
             )
         if len(rows) > 20:
             lines.append(f"... yana {len(rows) - 20} ta ariza bor")
